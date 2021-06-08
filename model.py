@@ -7,7 +7,7 @@ class ConvBlock(nn.Module):
         super(ConvBlock,self).__init__()
         self.conv = nn.Conv3d(in_ch,out_ch,kernel_size=(3,3,3),padding=1)
         self.bn = nn.BatchNorm3d(num_features=out_ch)
-        self.conv2 = nn.Conv3d(in_ch,out_ch,kernel_size=(3,3,3),padding=1)
+        self.conv2 = nn.Conv3d(out_ch,out_ch,kernel_size=(3,3,3),padding=1)
         self.bn2 = nn.BatchNorm3d(num_features=out_ch)
     def forward(self, input):
         x = self.conv(input)
