@@ -145,7 +145,7 @@ class lits_ribdataset(Dataset):
         label_array = sitk.GetArrayFromImage(label)
         if label_array.shape[0]<512:
            label_array = np.pad(label_array,((0,512-label_array.shape[0]),(0,0),(0,0)),'constant',constant_values = 0)
-        if label_array.shape[0]>512:
+        elif label_array.shape[0]>512:
             labe_array = label_array[:512,:,:]
         label_array = ndimage.zoom(label_array,(self.down_rate,self.down_rate,self.down_rate),order=0)
         a,b,c = label_array.shape
@@ -157,7 +157,9 @@ class lits_ribdataset(Dataset):
             if label_code==-1:
                 continue
             else:
-                mask = np.asarray([label_array==i])
+                mask = np.where(label_array==i,1,0).astype('uint8')
+                print(mask.shape)
+                print(np.max(mask))
                 label_ch[:,label_code,:,:,:]+=np.squeeze(mask)
                 label_ch = label_ch.astype('uint8')
         ct_data = np.expand_dims(ct_data,axis=0)
