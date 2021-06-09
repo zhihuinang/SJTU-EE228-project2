@@ -6,21 +6,25 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 
 from model import Unet3D
-from dataset import ribdataset,lits_ribdataset
+from dataset import lits_ribdataset,FracNetTrainDataset
 from metrics import tversky_loss
+from transfroms import Window,MinMaxNorm
 
 def train(model,loader,optimizer,device,args):
     trainingloss = 0
     for i,datas in enumerate(loader):
         print('training {}/{}......'.format(i,len(loader)))
-        ct = datas['data'].to(device)
-        label = datas['label']
+        ct,label = datas
+        ct = ct.to(device)
+        optimizer.zero_grad()
+
         output = model(ct).cpu()
         err = tversky_loss(label,output)
-        trainingloss = err.item()
+        print(err.item())
+        trainingloss += err.item()
         err.backward()
         optimizer.step()
-        print('training loss: {}'.format(trainingloss))
+        print('training loss: {}'.format(trainingloss/((i+1)*args.batch_size)))
         torch.save(model.state_dict(),args.output_dir+'/model.pth')
 
 def evaluation(model,loader,device,args):
@@ -35,7 +39,7 @@ def evaluation(model,loader,device,args):
             err = tversky_loss(label,output)
             valloss += err
 
-            print('evaluation loss: {}'.format(valloss/(i+1)))
+            print('evaluation loss: {}'.format(valloss/((i+1)*args.batch_size)))
 
 
 def main(args):
@@ -52,17 +56,22 @@ def main(args):
     else:
         device = 'cpu'
 
-    train_data = lits_ribdataset(split='train',down_sample_rate=args.down_rate)
-    val_data = lits_ribdataset(split='val',down_sample_rate=args.down_rate)
 
-    train_loader = DataLoader(train_data,
-                              batch_size=args.batch_size,
-                              shuffle=True)
-    val_loader = DataLoader(val_data,
-                            batch_size=1)
+    transform = [
+        Window(-200, 1000),
+        MinMaxNorm(-200, 1000)
+    ]
+    train_data = FracNetTrainDataset(split='train',transforms=transform)
+    val_data = FracNetTrainDataset(split='val',transforms=transform)
+
+    train_loader = FracNetTrainDataset.get_dataloader(train_data, 
+                                                    batch_size = args.batch_size,
+                                                    shuffle=True)
+    val_loader = FracNetTrainDataset.get_dataloader(val_data,
+                                                    batch_size=args.batch_size)
 
 
-    model = Unet3D(1,5).to(device)
+    model = Unet3D(1,1).to(device)
     optimizer = Adam(model.parameters(),lr=1e-3)
 
     for epoch in range(args.epoch):
@@ -75,7 +84,6 @@ if __name__ == '__main__':
     parser.add_argument('--task_id',required=True,type=str)
     parser.add_argument('--epoch',required=True,default=5,type=int)
     parser.add_argument('--batch_size',required=True,default=16,type=int)
-    parser.add_argument('--down_rate',default=0.25,type=float)
     args= parser.parse_args()
     main(args)
 

@@ -1,105 +1,21 @@
-from torch.utils.data import Dataset,DataLoader
-import pandas as pd
 import os
-import nibabel as nib
-import SimpleITK as sitk
-import torch
-from scipy import ndimage
-import numpy as np
-from tqdm import tqdm
-import skimage.transform as skTrans
-from nilearn.image import new_img_like,resample_to_img,resample_img
-import warnings
-warnings.filterwarnings('ignore')
 from itertools import product
+
+import nibabel as nib
+import numpy as np
+import torch
 from skimage.measure import regionprops
-
-
-class lits_ribdataset(Dataset):
-    def __init__(self,split='train',down_sample_rate=0.25):
-        self.split = split
-        if split=='train':
-            self.path = '../../data/ribfrac/train/'
-            self.label_path = '../../data/ribfrac/train_label/'
-            self.info_index = '../../data/ribfrac/ribfrac-train-info.csv'
-        elif split == 'val':
-            self.path = '../../data/ribfrac/val/'
-            self.label_path = '../../data/ribfrac/val_label/'
-            self.info_index = '../../data/ribfrac/ribfrac-val-info.csv'
-        elif split == 'test':
-            self.path = '../data/ribfrac/test/'
-            self.label_path = None
-            self.info_index = None
-        if self.info_index != None:
-            self.df = pd.read_csv(self.info_index)
-        for files in os.walk(self.path):
-            self.data_list = files[2]
-        self.down_rate = down_sample_rate
- 
-
-    def __len__(self):
-        return len(self.data_list)
-
-    def __getitem__(self, index):
-        ct_name = self.data_list[index]
-        prefix = ct_name[:-13]
-        label_name = prefix+'-label.nii.gz'
-
-        ct = sitk.ReadImage(self.path+ct_name,sitk.sitkInt16)
-        ct = sitk.Cast(sitk.RescaleIntensity(ct),sitk.sitkUInt8)
-        ct_data = sitk.GetArrayFromImage(ct)
-        h = ct_data.shape[0]
-
-        if ct_data.shape[0]<512:
-           ct_data = np.pad(ct_data,((0,512-ct_data.shape[0]),(0,0),(0,0)),'constant',constant_values = 0)
-        if ct_data.shape[0]>512:
-            ct_data = ct_data[:512,:,:]
-        ct_data = ndimage.zoom(ct_data,(self.down_rate,self.down_rate,self.down_rate),order=3)
-        ct_data = ct_data.astype('float32')
-        
-        if self.split =='test':
-            return {'data':np.expand_dims(ct_data,axis=0),'name':prefix,'height':h}
-
-
-        
-
-        label = sitk.ReadImage(self.label_path+label_name,sitk.sitkInt8)
-        label_array = sitk.GetArrayFromImage(label)
-        if label_array.shape[0]<512:
-            label_array = np.pad(label_array,((0,512-label_array.shape[0]),(0,0),(0,0)),'constant',constant_values = 0)
-        elif label_array.shape[0]>512:
-            label_array = label_array[:512,:,:]
-        label_array = ndimage.zoom(label_array,(self.down_rate,self.down_rate,self.down_rate),order=0)
-        a,b,c = label_array.shape
-        label_ch = np.zeros((5,a,b,c),dtype=np.uint8)
-        tempdf = self.df.loc[self.df['public_id']==prefix]
-        for i in range(tempdf.shape[0]):
-            label_code = tempdf.loc[tempdf['label_id']==i,'label_code']
-            label_code = label_code.tolist()[0]
-            if label_code==-1:
-                continue
-            else:
-                mask = np.where(label_array==i,1,0).astype('uint8')
-                label_ch[label_code,:,:,:]+=np.squeeze(mask)
-                label_ch = label_ch.astype('uint8')
-            
-        ct_data = np.expand_dims(ct_data,axis=0)
-        return {'data':ct_data[:,:,:,:],'label':label_ch[:,:,:,:]}
+from torch.utils.data import DataLoader, Dataset
 
 
 class FracNetTrainDataset(Dataset):
 
-    def __init__(self, split='train',crop_size=64,
+    def __init__(self, image_dir, label_dir=None, crop_size=64,
             transforms=None, num_samples=4, train=True):
-        self.split = split
-        if split=='train':
-            self.image_dir = '../../data/ribfrac/train/'
-            self.label_dir = '../../data/ribfrac/train_label/'
-        elif split == 'val':
-            self.image_dir = '../../data/ribfrac/val/'
-            self.label_dir = '../../data/ribfrac/val_label/'
+        self.image_dir = image_dir
+        self.label_dir = label_dir
         self.public_id_list = sorted([x.split("-")[0]
-            for x in os.listdir(self.image_dir)])
+            for x in os.listdir(image_dir)])
         self.crop_size = crop_size
         self.transforms = transforms
         self.num_samples = num_samples
@@ -256,6 +172,7 @@ class FracNetTrainDataset(Dataset):
         return DataLoader(dataset, batch_size, shuffle,
             num_workers=num_workers, collate_fn=FracNetTrainDataset.collate_fn)
 
+
 class FracNetInferenceDataset(Dataset):
 
     def __init__(self, image_path, crop_size=64, transforms=None):
@@ -314,4 +231,5 @@ class FracNetInferenceDataset(Dataset):
     def get_dataloader(dataset, batch_size, num_workers=0):
         return DataLoader(dataset, batch_size, num_workers=num_workers,
             collate_fn=FracNetInferenceDataset._collate_fn)
+
 
