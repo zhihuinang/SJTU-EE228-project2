@@ -9,7 +9,6 @@ from model import Unet3D
 from dataset import ribdataset,lits_ribdataset
 from metrics import tversky_loss
 
-
 def train(model,loader,optimizer,device,args):
     trainingloss = 0
     for i,datas in enumerate(loader):
@@ -18,11 +17,10 @@ def train(model,loader,optimizer,device,args):
         label = datas['label']
         output = model(ct).cpu()
         err = tversky_loss(label,output)
+        trainingloss = err.item()
         err.backward()
         optimizer.step()
-        trainingloss += err
-
-        print('training loss: {}'.format(trainingloss/(i+1)))
+        print('training loss: {}'.format(trainingloss))
         torch.save(model.state_dict(),args.output_dir+'/model.pth')
 
 def evaluation(model,loader,device,args):

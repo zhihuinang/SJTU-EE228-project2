@@ -65,7 +65,8 @@ class Unet3D(nn.Module):
         merge9 = torch.cat([up_9, c1], dim=1)
         c9 = self.conv9(merge9)
         c10 = self.conv10(c9)
-        out = nn.Sigmoid()(c10)
+        #out = nn.Sigmoid()(c10)
+        out= nn.Softmax(dim=1)(c10)
         return out
 
 

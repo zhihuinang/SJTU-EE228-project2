@@ -15,10 +15,15 @@ from metrics import tversky_loss
 
 
 def save_result(inputs,heights,outputs,name,args,output_file):
-    for sample in range(4):
+    for sample in range(2):
         output = outputs[sample,:,:,:,:]
-        in_put = inputs[sample,:,:,:,:]
         output = output.squeeze()
+        output = output.numpy()
+        max_value = output.max(axis=0,keepdims=1)
+        output[output<max_value]=0
+        
+
+        in_put = inputs[sample,:,:,:,:]
         in_put = in_put.squeeze()
         uprate = 1/args.down_rate
         output = ndimage.zoom(output,(1,uprate,uprate,uprate),order=0)
@@ -27,12 +32,16 @@ def save_result(inputs,heights,outputs,name,args,output_file):
         label_out = np.zeros((h,c,d))
         for i in range(5):
             if h<=b:
-                label_out = label_out+output[i,:h,:,:]
                 confi = np.max(output[i,:h,:,:])
+                output_chi = output[i,:h,:,:]
+                output_chi = np.where(output_chi>=0.2,1,0)
+                label_out = label_out+i*output_chi
             elif h>b:
-                output = np.pad(ouput,((0,h-output.shape[0]),(0,0),(0,0)),'constant',constant_values = 0)
-                label_out = label_out+output[i,:,:,:]
                 confi = np.max(output[i,:,:,:])
+                output = np.pad(ouput,((0,h-output.shape[0]),(0,0),(0,0)),'constant',constant_values = 0)
+                output_chi = output[i,:,:,:]
+                output_chi = np.where(output_chi>=0.2,1,0)
+                label_out = label_out+i*output_chi
             output_file.write(name[sample]+','+str(i)+','+str(confi)+','+str(i)+'\n')
         out = sitk.GetImageFromArray(label_out.astype(np.float64))
         sitk.WriteImage(out,args.output_dir+'/'+name[sample]+'-label.nii.gz')
@@ -66,7 +75,7 @@ def main(args):
     test_data = lits_ribdataset(split='test',down_sample_rate=args.down_rate)
 
     test_loader = DataLoader(test_data,
-                             batch_size=4)
+                             batch_size=2)
 
     
     model = Unet3D(1,5).to(device)
@@ -74,6 +83,7 @@ def main(args):
     model.load_state_dict(model_dict)
 
     output_file = open(output_dir+'/ribfrac-test-pred.csv','w')
+    output_file.write('public_id,label_id,confidence,label_code\n')
     test(model,test_loader,device,args,output_file)
     output_file.close()
 

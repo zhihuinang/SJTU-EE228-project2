@@ -149,7 +149,7 @@ class lits_ribdataset(Dataset):
             label_array = label_array[:512,:,:]
         label_array = ndimage.zoom(label_array,(self.down_rate,self.down_rate,self.down_rate),order=0)
         a,b,c = label_array.shape
-        label_ch = np.zeros((1,5,a,b,c),dtype=np.uint8)
+        label_ch = np.zeros((5,a,b,c),dtype=np.uint8)
         tempdf = self.df.loc[self.df['public_id']==prefix]
         for i in range(tempdf.shape[0]):
             label_code = tempdf.loc[tempdf['label_id']==i,'label_code']
@@ -158,8 +158,9 @@ class lits_ribdataset(Dataset):
                 continue
             else:
                 mask = np.where(label_array==i,1,0).astype('uint8')
-                label_ch[:,label_code,:,:,:]+=np.squeeze(mask)
+                label_ch[label_code,:,:,:]+=np.squeeze(mask)
                 label_ch = label_ch.astype('uint8')
+            
         ct_data = np.expand_dims(ct_data,axis=0)
-        return {'data':ct_data[:,:,:,:],'label':label_ch[:,:,:,:,:]}
+        return {'data':ct_data[:,:,:,:],'label':label_ch[:,:,:,:]}
 
