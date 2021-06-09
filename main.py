@@ -4,6 +4,7 @@ import argparse
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.optim import Adam
+import torch.nn as nn
 
 from model import Unet3D
 from dataset import lits_ribdataset,FracNetTrainDataset
@@ -20,20 +21,20 @@ def train(model,loader,optimizer,device,args):
 
         output = model(ct).cpu()
         err = tversky_loss(label,output)
-        print(err.item())
+
         trainingloss += err.item()
         err.backward()
         optimizer.step()
         print('training loss: {}'.format(trainingloss/((i+1)*args.batch_size)))
-        torch.save(model.state_dict(),args.output_dir+'/model.pth')
+        torch.save(model.module.state_dict(),args.output_dir+'/model.pth')
 
 def evaluation(model,loader,device,args):
     print('begin evaluation......')
     valloss = 0
     with torch.no_grad():
         for i,datas in enumerate(loader):
-            ct = datas['data'].to(device)
-            label = datas['label']
+            ct,label = datas
+            ct = ct.to(device)
 
             output = model(ct).cpu()
             err = tversky_loss(label,output)
@@ -49,7 +50,7 @@ def main(args):
     folder = os.path.exists(output_dir)
     if not folder:
         os.makedirs(output_dir)
-
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     if torch.cuda.is_available():
         device = 'cuda'
@@ -71,7 +72,9 @@ def main(args):
                                                     batch_size=args.batch_size)
 
 
-    model = Unet3D(1,1).to(device)
+    model = Unet3D(1,1)
+    model = nn.DataParallel(model)
+    model.to(device)
     optimizer = Adam(model.parameters(),lr=1e-3)
 
     for epoch in range(args.epoch):
@@ -84,6 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('--task_id',required=True,type=str)
     parser.add_argument('--epoch',required=True,default=5,type=int)
     parser.add_argument('--batch_size',required=True,default=16,type=int)
+    parser.add_argument('--gpu',default='0',type=str)
     args= parser.parse_args()
     main(args)
 

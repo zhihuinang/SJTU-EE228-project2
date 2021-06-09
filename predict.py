@@ -10,9 +10,9 @@ from skimage.measure import label, regionprops
 from skimage.morphology import disk, remove_small_objects
 from tqdm import tqdm
 
-from dataset.fracnet_dataset import FracNetInferenceDataset
-from dataset import transforms as tsfm
-from model.unet import UNet
+from dataset import FracNetInferenceDataset
+from transfroms import MinMaxNorm,Window
+from model import Unet3D
 
 
 def _remove_low_probs(pred, prob_thresh):
@@ -117,11 +117,11 @@ def _make_submission_files(pred, image_id, affine):
 
 
 def predict(args):
-    batch_size = 16
-    num_workers = 4
+    batch_size = 2
+    num_workers = 1
     postprocess = True if args.postprocess == "True" else False
 
-    model = UNet(1, 1, first_out_channels=16)
+    model = Unet3D(1, 1)
     model.eval()
     if args.model_path is not None:
         model_weights = torch.load(args.model_path)
@@ -129,8 +129,8 @@ def predict(args):
     model = nn.DataParallel(model).cuda()
 
     transforms = [
-        tsfm.Window(-200, 1000),
-        tsfm.MinMaxNorm(-200, 1000)
+        Window(-200, 1000),
+        MinMaxNorm(-200, 1000)
     ]
 
     image_path_list = sorted([os.path.join(args.image_dir, file)
@@ -168,12 +168,9 @@ if __name__ == "__main__":
     size_thresh = 100
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image_dir", required=True,
+    parser.add_argument("--image_dir",default='../data/ribfrac/test/',
         help="The image nii directory.")
-    parser.add_argument("--pred_dir", required=True,
-        help="The directory for saving predictions.")
-    parser.add_argument("--model_path", default=None,
-        help="The PyTorch model weight path.")
+    parser.add_argument("--task_id",required=True)
     parser.add_argument("--prob_thresh", default=0.1,
         help="Prediction probability threshold.")
     parser.add_argument("--bone_thresh", default=300,
@@ -183,4 +180,8 @@ if __name__ == "__main__":
     parser.add_argument("--postprocess", default="True",
         help="Whether to execute post-processing.")
     args = parser.parse_args()
+    args.pred_dir = '../output/'+args.task_id
+    args.model_path = args.pred_dir+'/model.pth'
+
+
     predict(args)

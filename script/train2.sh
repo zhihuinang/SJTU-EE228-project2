@@ -1,8 +1,9 @@
 #!/bin/bash
 
 OPT = ""
-OPT+="--task_id new1 "
+OPT+="--task_id new2 "
 OPT+="--epoch 2 "
-OPT+="--batch_size 1 "
+OPT+="--batch_size 2 "
+OPT+="--gpu 0,1"
 
-CUDA_VISIBLE_DEVICES=1 python3  ../main.py $OPT
+python3  ../main.py $OPT
