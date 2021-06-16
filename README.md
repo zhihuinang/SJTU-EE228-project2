@@ -21,7 +21,7 @@ SJTU-EE228-project2
 
 To train a model, just simply run the scripts in ./script directory.
 ```
-cd ./scripts/
+cd ./script/
 bash train2.sh
 ```
 The model parameter will be saved in ../output/${task_id}/
