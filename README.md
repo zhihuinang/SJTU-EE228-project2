@@ -32,3 +32,5 @@ python predict.py --task_id ${your task id}
 ```
 The output prediction result will be saved in ../output/${task_id}/
 
+### test result
+The prediction result on VALIDATION set is uploaded in ./prediction_directory
