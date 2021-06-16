@@ -22,13 +22,13 @@ class Unet3D(nn.Module):
     def __init__(self,in_ch,out_ch):
         super(Unet3D,self).__init__()
         self.conv1 = ConvBlock(in_ch, 64)
-        self.pool1 = nn.MaxPool3d(2,stride=2)
+        self.pool1 = nn.MaxPool3d((2,2,2),stride=2)
         self.conv2 = ConvBlock(64, 128)
-        self.pool2 = nn.MaxPool3d(2,stride=2)
+        self.pool2 = nn.MaxPool3d((2,2,2),stride=2)
         self.conv3 = ConvBlock(128, 256)
-        self.pool3 = nn.MaxPool3d(2,stride=2)
+        self.pool3 = nn.MaxPool3d((2,2,2),stride=2)
         self.conv4 = ConvBlock(256, 512)
-        self.pool4 = nn.MaxPool3d(2,stride=2)
+        self.pool4 = nn.MaxPool3d((2,2,2),stride=2)
         self.conv5 = ConvBlock(512, 1024)
 
 

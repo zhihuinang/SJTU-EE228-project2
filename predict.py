@@ -1,5 +1,5 @@
 import os
-
+import time
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -30,7 +30,7 @@ def _remove_spine_fp(pred, image, bone_thresh):
     image_spine = ndimage.binary_opening(image_spine, kernel)
     image_spine = ndimage.binary_closing(image_spine, kernel)
     image_spine_label = label(image_spine)
-    max_area = 0
+    max_area=0
 
     for region in regionprops(image_spine_label):
         if region.area > max_area:
@@ -71,12 +71,20 @@ def _predict_single_image(model, dataloader, postprocess, prob_thresh,
         bone_thresh, size_thresh):
     pred = np.zeros(dataloader.dataset.image.shape)
     crop_size = dataloader.dataset.crop_size
+    pred_time = 0
     with torch.no_grad():
         for _, sample in enumerate(dataloader):
             images, centers = sample
             images = images.cuda()
+            
+            torch.cuda.synchronize()
+            start = time.time()
+            
             output = model(images).cpu().numpy().squeeze(axis=1)
-
+            
+            torch.cuda.synchronize()
+            end1 = time.time()
+            pred_time+=(end1-start)
             for i in range(len(centers)):
                 center_x, center_y, center_z = centers[i]
                 cur_pred_patch = pred[
@@ -90,12 +98,11 @@ def _predict_single_image(model, dataloader, postprocess, prob_thresh,
                     center_z - crop_size // 2:center_z + crop_size // 2
                 ] = np.where(cur_pred_patch > 0, np.mean((output[i],
                     cur_pred_patch), axis=0), output[i])
-
     if postprocess:
         pred = _post_process(pred, dataloader.dataset.image, prob_thresh,
             bone_thresh, size_thresh)
-
-    return pred
+    print('inference time:{}'.format(pred_time))
+    return pred, pred_time
 
 
 def _make_submission_files(pred, image_id, affine):
@@ -117,8 +124,8 @@ def _make_submission_files(pred, image_id, affine):
 
 
 def predict(args):
-    batch_size = 2
-    num_workers = 1
+    batch_size = 24
+    num_workers = 16
     postprocess = True if args.postprocess == "True" else False
 
     model = Unet3D(1, 1)
@@ -140,30 +147,32 @@ def predict(args):
 
     progress = tqdm(total=len(image_id_list))
     pred_info_list = []
+    pred_time_all = 0
     for image_id, image_path in zip(image_id_list, image_path_list):
         dataset = FracNetInferenceDataset(image_path, transforms=transforms)
         dataloader = FracNetInferenceDataset.get_dataloader(dataset,
             batch_size, num_workers)
-        pred_arr = _predict_single_image(model, dataloader, postprocess,
+        pred_arr,pred_time = _predict_single_image(model, dataloader, postprocess,
             args.prob_thresh, args.bone_thresh, args.size_thresh)
+        pred_time_all += pred_time
         pred_image, pred_info = _make_submission_files(pred_arr, image_id,
             dataset.image_affine)
         pred_info_list.append(pred_info)
-        pred_path = os.path.join(args.pred_dir, f"{image_id}_pred.nii.gz")
+        pred_path = os.path.join(args.pred_dir, f"{image_id}-label.nii.gz")
         nib.save(pred_image, pred_path)
 
         progress.update()
 
     pred_info = pd.concat(pred_info_list, ignore_index=True)
-    pred_info.to_csv(os.path.join(args.pred_dir, "pred_info.csv"),
+    pred_info.to_csv(os.path.join(args.pred_dir, "ribfrac-test-pred.csv"),
         index=False)
-
+    print('average inference time:{}'.format(pred_time_all/160))
 
 if __name__ == "__main__":
     import argparse
 
 
-    prob_thresh = 0.1
+    prob_thresh = 0.2
     bone_thresh = 300
     size_thresh = 100
 
@@ -171,7 +180,7 @@ if __name__ == "__main__":
     parser.add_argument("--image_dir",default='../data/ribfrac/test/',
         help="The image nii directory.")
     parser.add_argument("--task_id",required=True)
-    parser.add_argument("--prob_thresh", default=0.1,
+    parser.add_argument("--prob_thresh", default=0.2,
         help="Prediction probability threshold.")
     parser.add_argument("--bone_thresh", default=300,
         help="Bone binarization threshold.")
